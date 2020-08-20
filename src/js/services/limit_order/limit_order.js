@@ -119,7 +119,7 @@ export function cancelOrder(order) {
                 if (result.success) {
                     resolve(result.cancelled)
                 } else {
-                    rejected(new Error("Cannot cancel order"));
+                    rejected(new Error(result.message));
                 }
             })
             .catch((err) => {
@@ -230,7 +230,7 @@ export function getOrdersByIdArr(idArr) {
     })
 }
 
-export function isEligibleAddress(addr) {
+export function getEligibleAccount(addr) {
     return new Promise((resolve, reject) => {
         var path = `/api/orders/eligible_address?user_addr=${addr}`;
         timeout(MAX_REQUEST_TIMEOUT, fetch(path))
@@ -239,8 +239,9 @@ export function isEligibleAddress(addr) {
             })
             .then((result) => {
                 if (result.success) {
-                    const { eligible_address } = result;
-                    resolve(eligible_address ? true : false);
+                    const isEligible = result.eligible_address;
+                    const eligibleAccount = isEligible ? null : result.account;
+                    resolve(eligibleAccount);
                 } else {
                     reject(new Error("Cannot validate eligible address"));
                 }
@@ -310,7 +311,7 @@ export function getRelatedOrders(sourceToken, destToken, minRate, address) {
     })
 }
 
-export function getOrdersByFilter(address = null, pair = null, status = null, time = null, dateSort = "desc", pageIndex = 1, pageSize = LIMIT_ORDER_CONFIG.pageSize) {
+export function getOrdersByFilter(address = null, pair = null, type = null, status = null, time = null, dateSort = "desc", pageIndex = 1, pageSize = LIMIT_ORDER_CONFIG.pageSize) {
     let path = `/api/orders?page_index=${pageIndex}&page_size=${pageSize}`;
 
     if (address) {
@@ -344,6 +345,12 @@ export function getOrdersByFilter(address = null, pair = null, status = null, ti
         path += `&sort=${dateSort}`;
     }
 
+    if (type) {
+        const params = type.reduce((sum, item) => {
+            return sum + `&type[]=${item}`;
+        }, "");
+        path += params;
+    }
     return new Promise((resolve, rejected) => {
         timeout(MAX_REQUEST_TIMEOUT, fetch(path))
             .then((response) => {
@@ -371,4 +378,47 @@ export function getOrdersByFilter(address = null, pair = null, status = null, ti
 export function getModeLimitOrder() {
     const totalOrders = getCookie("order_count");
     return totalOrders <= LIMIT_ORDER_CONFIG.pageSize ? "client" : "server";    
+}
+
+export function getFavoritePairs(){
+  return new Promise((resolve, rejected) => {
+    timeout(MAX_REQUEST_TIMEOUT, fetch("/api/orders/favorite_pairs"))
+    .then((response) => {
+      return response.json()
+    }).then((result) => {
+      if (result.success) {
+        resolve(result.favorite_pairs)
+      } else {
+        rejected(new Error("Cannot get favorite pairs"));
+      }
+    })
+    .catch((err) => {
+        rejected(new Error(`Cannot get favorite pairs: ${err.toString}`))
+    })
+  })
+}
+
+export function updateFavoritePairs(base, quote, to_fav){
+  return new Promise((resolve, rejected) => {
+    timeout(MAX_REQUEST_TIMEOUT, fetch("/api/orders/favorite_pair", { 
+      method: "PUT",
+      headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({base: base, quote: quote, status: to_fav.toString()})
+    }))
+    .then((response) => {
+      return response.json()
+    }).then((result) => {
+      if (result.success) {
+        resolve(result)
+      } else {
+        rejected(new Error("Cannot update favorite pair"));
+      }
+    })
+    .catch((err) => {
+        rejected(new Error(`Cannot update favorite pair: ${err.toString}`))
+    })
+  })
 }
